@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script type="module">
+        import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+</head>
+<body>
+    <div class="mermaid">
+        %%{init: {'theme': 'default'}}%%
+        flowchart TD
+            A[User submits login request] -->|Username & Password| B(login_route)
+            B -->|Calls| C(authenticate_user)
+            C -->|Hashes Password| D(hash_password)
+            D -->|SHA-256 Hash| E[Hashed Password]
+            C -->|Calls| F(check_db)
+            F -->|Searches in DB| G[db.find_user]
+            G -->|User Found?| H{Valid User?}
+            H -->|Yes| I[Return Success]
+            H -->|No| J[Return Failed]
+
+        classDef default fill:#f9f,stroke:#333,stroke-width:2px;
+        classDef process fill:#bbf,stroke:#333,stroke-width:1px;
+        classDef decision fill:#ff9,stroke:#333,stroke-width:2px;
+        classDef db fill:#cfc,stroke:#333,stroke-width:1px;
+        
+        class B,C,D,F process;
+        class E default;
+        class G db;
+        class H decision;
+    </div>
+
+    <script>
+        setTimeout(() => {
+            let nodes = document.querySelectorAll(".mermaid svg g.node");
+            gsap.from(nodes, { opacity: 0, y: -50, duration: 1, stagger: 0.2 });
+            
+            let edges = document.querySelectorAll(".mermaid svg g.edgePath path");
+            gsap.from(edges, { strokeDasharray: 200, strokeDashoffset: 200, duration: 1.5, ease: "power2.out" });
+        }, 500);
+    </script>
+</body>
+</html>
