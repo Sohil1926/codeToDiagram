@@ -6,67 +6,40 @@ import zipfile
 
 import requests
 
-def fetch_github_files(url: str, gh_token: str = None) -> List[Dict]:
-     # Parse GitHub URL
-    parsed = urlparse(url)
-    if 'github.com' not in parsed.netloc:
-        raise ValueError('Invalid GitHub URL')
+def fetch_github_files(repo_url: str, gh_token: str = None) -> List[Dict]:
+    """Fetch files from a GitHub repository"""
+    headers = {'Authorization': f'token {gh_token}'} if gh_token else {}
     
-    path_parts = parsed.path.strip('/').split('/')
-    if len(path_parts) < 2:
-        raise ValueError('Invalid GitHub repository URL format')
-        
-    owner, repo = path_parts[:2]
-    branch = 'main'  # Default branch - could be parameterized
-
-    # Setup headers with authentication if provided
-    headers = {'Accept': 'application/vnd.github.v3+raw'}
-    if gh_token:
-        headers['Authorization'] = f'token {gh_token}'
-
-    # Get archive URL (single request)
-    archive_url = f'https://api.github.com/repos/{owner}/{repo}/zipball/{branch}'
+    # Try both main and master branches
+    branches = ['main', 'master']
+    files = []
     
-    try:
-        # Download repository archive
-        response = requests.get(archive_url, headers=headers)
-        response.raise_for_status()
-        
-        # Process zip file in memory
-        zip_bytes = io.BytesIO(response.content)
-        files = []
-        
-        with zipfile.ZipFile(zip_bytes) as zip_file:
-            for file_info in zip_file.infolist():
-                if file_info.is_dir():
-                    continue
+    for branch in branches:
+        try:
+            # Convert github.com URL to api.github.com
+            zip_url = repo_url.replace('github.com', 'api.github.com/repos')
+            zip_url = f"{zip_url}/zipball/{branch}"
+            
+            response = requests.get(zip_url, headers=headers, allow_redirects=True)
+            if response.status_code == 200:
+                with zipfile.ZipFile(io.BytesIO(response.content)) as zip_file:
+                    for file_info in zip_file.filelist:
+                        try:
+                            with zip_file.open(file_info) as file:
+                                content = file.read().decode('utf-8')
+                                files.append({
+                                    'name': file_info.filename.split('/', 1)[1],
+                                    'content': content,
+                                    'branch': branch,
+                                    'size': file_info.file_size
+                                })
+                        except (UnicodeDecodeError, IndexError):
+                            continue
+                return files
                 
-                try:
-                    with zip_file.open(file_info) as f:
-                        content = f.read().decode('utf-8')
-                except UnicodeDecodeError:
-                    # Skip binary files
-                    continue
-                
-                files.append({
-                    'name': os.path.basename(file_info.filename),
-                    'file_path': file_info.filename,
-                    'file_type': 'file',
-                    'content': content,
-                    'size': file_info.file_size
-                })
-        
-        print(f"Fetched {len(files)} files from {owner}/{repo}")
-        return files
-
-    except requests.HTTPError as e:
-        if e.response.status_code == 403:
-            reset_time = e.response.headers.get('X-RateLimit-Reset')
-            raise RuntimeError(
-                f"Rate limit exceeded. Reset at {reset_time} "
-                f"(Remaining: {e.response.headers.get('X-RateLimit-Remaining')})"
-            )
-        raise
-    except Exception as e:
-        print(f"Error fetching files: {str(e)}")
-        raise
+        except Exception as e:
+            if branch == branches[-1]:  # Only raise error if both branches fail
+                raise Exception(f"Failed to fetch repository: {str(e)}")
+            continue
+            
+    return files
