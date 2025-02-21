@@ -5,7 +5,7 @@ class RawDocument:
     """
     A class representing a raw document with content. A document object contains a chunk of code from a file. 
     """
-    def __init__(self, content: str, file_name: str, file_path: str, file_size: int, timestamp: str, original_file: str, metadata: Optional[dict] = None):
+    def __init__(self, content: str, file_name: str, file_path: str, file_size: int, timestamp: str, original_file: str, chunk_metadata: Optional[dict] = None):
         """
         Initialize the RawDocument with the given content.
         """
@@ -15,7 +15,7 @@ class RawDocument:
         self.file_size = file_size
         self.timestamp = timestamp
         self.original_file = original_file
-        self.metadata = metadata
+        self.chunk_metadata = chunk_metadata
 
   
     
