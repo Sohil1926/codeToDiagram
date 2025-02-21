@@ -11,6 +11,12 @@ class TreeSitterManager:
     def __init__(self):
         self.parser = Parser()
         self.language_map = self._load_languages()
+        
+        # Set a default language (e.g., javascript) if available
+        if self.language_map:
+            default_lang = next(iter(self.language_map.values()))
+            self.parser.set_language(default_lang)
+        
         logger.debug(f"Loaded languages: {list(self.language_map.keys())}")
 
     def _load_languages(self) -> Dict[str, Language]:
@@ -72,11 +78,14 @@ class TreeSitterManager:
         logger.debug(f"Detected language {detected_lang} for file {file_path}")
         return detected_lang
 
+    def set_language(self, lang_name: str) -> None:
+        """Set the parser's language"""
+        if lang_name not in self.language_map:
+            raise ValueError(f"No parser available for language {lang_name}")
+        self.parser.set_language(self.language_map[lang_name])
+
     def parse_file(self, file_path: str, content: str) -> Parser:
         """Parse file content with appropriate language parser"""
         lang_name = self.get_language(file_path)
-        if lang_name not in self.language_map:
-            raise ValueError(f"No parser available for language {lang_name}")
-            
-        self.parser.set_language(self.language_map[lang_name])
+        self.set_language(lang_name)  # Use the new set_language method
         return self.parser.parse(bytes(content, "utf8"))
