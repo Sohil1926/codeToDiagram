@@ -5,6 +5,7 @@ from raw_document import RawDocument
 from chunking import chunk_file
 from datetime import datetime
 from utils.tree_sitter_utils import TreeSitterManager
+from raw_document_dao import RawDocumentDAO
 
 class BaseIngestor(ABC):
     """
@@ -27,7 +28,7 @@ class GitHubIngestor(BaseIngestor):
         self.coalesce = coalesce
         self.ts_manager = TreeSitterManager()
 
-    def ingest(self) -> List[RawDocument]:
+    def ingest(self, save_to_db: bool = True) -> List[RawDocument]:
         # Fetch files from GitHub
         files = fetch_github_files(
             repo_url=self.url,
@@ -62,12 +63,16 @@ class GitHubIngestor(BaseIngestor):
                     file_size=len(chunk['content']),
                     timestamp=datetime.utcnow().isoformat(),
                     original_file=chunk['original_file'],
-                    metadata={
+                    chunk_metadata={
                         "chunk_index": chunk['chunk_index'],
                         "start_line": chunk['start_line'],
                         "end_line": chunk['end_line']
                     }
                 )
             )
+        
+        if save_to_db:
+            # Save all documents in one batch
+            RawDocumentDAO.batch_save(documents)
         
         return documents
