@@ -1,53 +1,25 @@
 import os
 from pathlib import Path
-from tree_sitter import Language, Parser, Node
+from tree_sitter import Node
 from typing import Dict, List
 import warnings
 import logging
+from utils.tree_sitter_utils import TreeSitterManager
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Suppress Tree-sitter warnings
+# Suppress Tree-sitter warnings 
 warnings.filterwarnings("ignore", category=UserWarning)
 
 class CodebaseMapper:
     def __init__(self):
-        self.parser = Parser()
         logger.debug("Initializing RepoMapper")
-        self.language_map = self._load_languages()
+        self.ts_manager = TreeSitterManager()
         self.query_map = self._load_queries()
-        logger.debug(f"Loaded languages: {list(self.language_map.keys())}")
         logger.debug(f"Loaded queries: {list(self.query_map.keys())}")
         
-    def _load_languages(self) -> Dict[str, Language]:
-        """Load all Tree-sitter language parsers"""
-        languages = {}
-        lang_dir = Path("vendor")
-        logger.debug(f"Looking for language parsers in {lang_dir}")
-        
-        if not lang_dir.exists():
-            logger.error(f"Vendor directory not found at {lang_dir}")
-            return languages
-        
-        for lang_path in lang_dir.glob("tree-sitter-*"):
-            lang_name = lang_path.name.split("-", 2)[-1]
-            lib_path = f"build/{lang_name}.so"
-            logger.debug(f"Processing language: {lang_name}")
-            
-            try:
-                if not Path(lib_path).exists():
-                    logger.debug(f"Building language library for {lang_name}")
-                    Language.build_library(lib_path, [str(lang_path)])
-                
-                languages[lang_name] = Language(lib_path, lang_name)
-                logger.debug(f"Successfully loaded {lang_name}")
-            except Exception as e:
-                logger.error(f"Error loading language {lang_name}: {str(e)}")
-            
-        return languages
-    
     def _load_queries(self) -> Dict[str, str]:
         """Load Tree-sitter query files for each language"""
         queries = {}
@@ -64,20 +36,6 @@ class CodebaseMapper:
             queries[lang_name] = query_file.read_text()
             
         return queries
-    
-    def _get_language(self, file_path: str) -> str:
-        """Detect language from file extension"""
-        ext = Path(file_path).suffix.lower().lstrip('.')
-        lang_map = {
-            'js': 'javascript', 'jsx': 'javascript',
-            'py': 'python', 'java': 'java',
-            'go': 'go', 'rs': 'rust',
-            'ts': 'typescript', 'tsx': 'typescript',
-            'rb': 'ruby'
-        }
-        detected_lang = lang_map.get(ext, ext)
-        logger.debug(f"Detected language {detected_lang} for file {file_path}")
-        return detected_lang
     
     def _get_code_snippet(self, content: str, node: Node) -> str:
         """Extract relevant code snippet with context"""
@@ -99,17 +57,15 @@ class CodebaseMapper:
     
     def _process_file(self, file: Dict) -> List[str]:
         """Process a single file to extract key symbols"""
-        lang_name = self._get_language(file['name'])  
+        lang_name = self.ts_manager.get_language(file['name'])
         logger.debug(f"Processing file {file['name']} with language {lang_name}")
         
-        if lang_name not in self.language_map:
-            logger.warning(f"No parser available for language {lang_name}")
-            return []
-            
-        self.parser.set_language(self.language_map[lang_name])
         try:
-            tree = self.parser.parse(bytes(file['content'], "utf8"))
+            tree = self.ts_manager.parse_file(file['name'], file['content'])
             logger.debug(f"Successfully parsed {file['name']}")
+        except ValueError as e:
+            logger.error(f"Error processing file {file['name']}: {str(e)}")
+            return []
         except Exception as e:
             logger.error(f"Error parsing {file['name']}: {str(e)}")
             return []
@@ -121,7 +77,7 @@ class CodebaseMapper:
             return []
             
         try:
-            captures = self.language_map[lang_name].query(query).captures(tree.root_node)
+            captures = self.ts_manager.language_map[lang_name].query(query).captures(tree.root_node)
             logger.debug(f"Found {len(captures)} captures in {file['name']}")
         except Exception as e:
             logger.error(f"Error querying {file['name']}: {str(e)}")
@@ -160,4 +116,3 @@ class CodebaseMapper:
         result = '\n'.join(repo_map)
         logger.info(f"Generated repo map with {len(repo_map)} files")
         return result[:8000]  # Limit to typical context window size
-
