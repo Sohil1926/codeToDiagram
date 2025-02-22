@@ -124,7 +124,6 @@ def chunk_file(
         result_chunks.append({
             'content': chunk_content.strip(),
             'file_name': file_name,
-            'file_path': file_info.get('path', ''),
             'chunk_index': i,
             'original_file': file_name,
             'start_line': chunk.start,

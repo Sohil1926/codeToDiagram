@@ -59,7 +59,6 @@ class GitHubIngestor(BaseIngestor):
                 RawDocument(
                     content=chunk['content'],
                     file_name=chunk['file_name'],
-                    file_path=chunk['file_path'],
                     file_size=len(chunk['content']),
                     timestamp=datetime.utcnow().isoformat(),
                     original_file=chunk['original_file'],
