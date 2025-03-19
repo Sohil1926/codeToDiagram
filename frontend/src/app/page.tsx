@@ -1,4 +1,4 @@
-// page.tsx
+// page.tsx - Updated with processing status handling
 'use client';
 
 import { useState } from 'react';
@@ -31,8 +31,9 @@ export default function Home() {
       
       const data = await response.json();
       
-      // Store the diagram code in localStorage
+      // Store the diagram code and repository URL in localStorage
       localStorage.setItem('diagramCode', data.diagram_code);
+      localStorage.setItem('repoUrl', url); // Store URL for status checks
       
       // Navigate to the graph render page
       router.push('/graphrender');

@@ -1,6 +1,6 @@
 from typing import Dict, List, Any
 from urllib.parse import urlparse
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from datetime import datetime
@@ -35,6 +35,30 @@ app.add_middleware(
 # Initialize CodebaseMapper
 codebase_mapper = CodebaseMapper()
 
+# Add a global variable to track processing status for repositories
+processing_status = {}
+
+def process_repo_background(url: str):
+    """
+    Background function to handle the time-consuming processing steps.
+    """
+    try:
+        logger.info(f"Starting background processing for {url}")
+        processing_status[url] = "processing"
+        
+        # Process and store files for future questions
+        github_ingestor = GitHubIngestor(url=url) 
+        raw_docs = github_ingestor.ingest()
+        
+        processor = GitHubProcessor(embedder=OpenAIEmbedder())
+        processed_docs = processor.process(raw_docs)
+        
+        processing_status[url] = "completed"
+        logger.info(f"Background processing completed for {url}")
+    except Exception as e:
+        processing_status[url] = "failed"
+        logger.error(f"Background processing failed for {url}: {str(e)}")
+
 def query_embeddings(query: str) -> List[Dict]:
     """
     Retrieves relevant documents from the vector database based on the query.
@@ -47,11 +71,11 @@ def query_embeddings(query: str) -> List[Dict]:
         logger.error(f"Error querying embeddings: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/generate_diagram")
-async def generate_diagram(url: str = Body(..., embed=True)):
+async def generate_diagram(url: str = Body(..., embed=True), background_tasks: BackgroundTasks = None):
     """
     Endpoint to generate an initial diagram from a GitHub repository URL.
+    This endpoint now returns the diagram immediately while processing in the background.
     """
     try:
         # Validate URL
@@ -65,23 +89,32 @@ async def generate_diagram(url: str = Body(..., embed=True)):
         # Generate codebase map
         repo_map = codebase_mapper.generate_repo_map(files)
         
-        # Process and store files for future questions if not already done
-        github_ingestor = GitHubIngestor(url=url) 
-        raw_docs = github_ingestor.ingest()
-        
-        processor = GitHubProcessor(embedder=OpenAIEmbedder())
-        processed_docs = processor.process(raw_docs)
-        
-        # Now create the initial diagram using the codebase map
+        # Generate initial diagram immediately using only the codebase map
         diagram_code = generate_initial_diagram(repo_map)
         
-        return {"diagram_code": diagram_code}
+        # Start background processing if not already in progress
+        if url not in processing_status or processing_status[url] == "failed":
+            # Add the background task
+            background_tasks.add_task(process_repo_background, url)
+        
+        return {"diagram_code": diagram_code, "processing_status": processing_status.get(url, "starting")}
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error in generate_diagram: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/processing_status")
+async def get_processing_status(url: str):
+    """
+    New endpoint to check the status of background processing.
+    Uses a query parameter instead of a path parameter.
+    """
+    # URL is now a query parameter
+    status = processing_status.get(url, "not_started")
+    return {"status": status}
+
 
 @app.post("/ask_question")
 async def ask_question(question: str = Body(..., embed=True)):
