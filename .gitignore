@@ -3,8 +3,17 @@ venv/
 .venv/
 env/
 ENV/
+.env
 
 # Python stuff
 __pycache__/
 *.py[cod]
 *$py.class
+
+code-to-diagram-ui/
+queries/
+tests/
+
+# Documentation and Notebooks
+*.md
+*.ipynb
